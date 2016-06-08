@@ -7,7 +7,6 @@
 //
 
 #import "VideoContentCell.h"
-#import "ASVideoPlayerNode.h"
 #import "Utilities.h"
 
 #define AVATAR_IMAGE_HEIGHT     30

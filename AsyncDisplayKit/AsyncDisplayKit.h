@@ -22,6 +22,8 @@
 #import <AsyncDisplayKit/ASNetworkImageNode.h>
 #import <AsyncDisplayKit/ASPhotosFrameworkImageRequest.h>
 
+#import <AsyncDisplayKit/ASVideoPlayerNode.h>
+
 #import <AsyncDisplayKit/ASTableView.h>
 #import <AsyncDisplayKit/ASTableNode.h>
 #import <AsyncDisplayKit/ASCollectionView.h>
