@@ -16,7 +16,7 @@
 #import "ASSentinel.h"
 #import "ASThread.h"
 #import "_ASTransitionContext.h"
-#import "ASDisplayNodeLayoutContext.h"
+#import "ASLayoutTransition.h"
 #import "ASEnvironment.h"
 
 #include <vector>
@@ -82,7 +82,6 @@ FOUNDATION_EXPORT NSString * const ASRenderingEngineDidDisplayNodesScheduledBefo
     unsigned implementsDrawParameters:1;
 
     // internal state
-    unsigned isMeasured:1;
     unsigned isEnteringHierarchy:1;
     unsigned isExitingHierarchy:1;
     unsigned isInHierarchy:1;
@@ -93,15 +92,15 @@ FOUNDATION_EXPORT NSString * const ASRenderingEngineDidDisplayNodesScheduledBefo
   ASDisplayNode * __weak _supernode;
 
   ASSentinel *_displaySentinel;
-  ASSentinel *_transitionSentinel;
+
+  int32_t _transitionID;
+  BOOL _transitionInProgress;
 
   // This is the desired contentsScale, not the scale at which the layer's contents should be displayed
   CGFloat _contentsScaleForDisplay;
 
   ASEnvironmentState _environmentState;
   ASLayout *_layout;
-
-  ASSizeRange _constrainedSize;
 
   UIEdgeInsets _hitTestSlop;
   NSMutableArray *_subnodes;
@@ -111,7 +110,7 @@ FOUNDATION_EXPORT NSString * const ASRenderingEngineDidDisplayNodesScheduledBefo
   BOOL _usesImplicitHierarchyManagement;
 
   int32_t _pendingTransitionID;
-  ASDisplayNodeLayoutContext *_pendingLayoutContext;
+  ASLayoutTransition *_pendingLayoutTransition;
   
   ASDisplayNodeViewBlock _viewBlock;
   ASDisplayNodeLayerBlock _layerBlock;
@@ -225,5 +224,11 @@ FOUNDATION_EXPORT NSString * const ASRenderingEngineDidDisplayNodesScheduledBefo
  * If YES, this method must be called on the main thread and the node must not be layer-backed.
  */
 - (ASDisplayNode *)_supernodeWithClass:(Class)supernodeClass checkViewHierarchy:(BOOL)checkViewHierarchy;
+
+/**
+ *  Convenience method to access this node's trait collection struct. Externally, users should interact
+ *  with the trait collection via ASTraitCollection
+ */
+- (ASEnvironmentTraitCollection)environmentTraitCollection;
 
 @end

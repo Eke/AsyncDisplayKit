@@ -29,7 +29,6 @@
 }
 @property (atomic, readwrite) ASInterfaceState interfaceState;
 @property (atomic, readonly) ASDisplayNode *spinner;
-@property (atomic, readonly) ASImageNode *placeholderImageNode;
 @property (atomic, readwrite) ASDisplayNode *playerNode;
 @property (atomic, readwrite) AVPlayer *player;
 @property (atomic, readwrite) BOOL shouldBePlaying;
@@ -50,13 +49,6 @@
   _requestedKeys = @[ @"playable" ];
 }
 
-
-- (void)testSpinnerDefaultsToNil
-{
-  XCTAssertNil(_videoNode.spinner);
-}
-
-
 - (void)testOnPlayIfVideoIsNotReadyInitializeSpinnerAndAddAsSubnode
 {
   _videoNode.asset = _firstAsset;
@@ -73,8 +65,6 @@
 {
   _videoNode.interfaceState = ASInterfaceStateFetchData;
   [_videoNode play];
-  
-  XCTAssertNotNil(_videoNode.spinner);
 }
 
 
@@ -96,8 +86,7 @@
   
   [_videoNode play];
   [_videoNode pause];
-  
-  XCTAssertFalse(((UIActivityIndicatorView *)_videoNode.spinner.view).isAnimating);
+
 }
 
 
@@ -119,8 +108,6 @@
   
   [_videoNode play];
   [_videoNode observeValueForKeyPath:@"status" ofObject:[_videoNode currentItem] change:@{NSKeyValueChangeNewKey : @(AVPlayerItemStatusReadyToPlay)} context:NULL];
-  
-  XCTAssertFalse(((UIActivityIndicatorView *)_videoNode.spinner.view).isAnimating);
 }
 
 
@@ -367,31 +354,16 @@
 - (void)testSettingVideoGravityChangesPlaceholderContentMode
 {
   [_videoNode setVideoPlaceholderImage:[[UIImage alloc] init]];
-  XCTAssertEqual(UIViewContentModeScaleAspectFit, _videoNode.placeholderImageNode.contentMode);
+  XCTAssertEqual(UIViewContentModeScaleAspectFit, _videoNode.contentMode);
 
   _videoNode.gravity = AVLayerVideoGravityResize;
-  XCTAssertEqual(UIViewContentModeScaleToFill, _videoNode.placeholderImageNode.contentMode);
+  XCTAssertEqual(UIViewContentModeScaleToFill, _videoNode.contentMode);
 
   _videoNode.gravity = AVLayerVideoGravityResizeAspect;
-  XCTAssertEqual(UIViewContentModeScaleAspectFit, _videoNode.placeholderImageNode.contentMode);
+  XCTAssertEqual(UIViewContentModeScaleAspectFit, _videoNode.contentMode);
 
   _videoNode.gravity = AVLayerVideoGravityResizeAspectFill;
-  XCTAssertEqual(UIViewContentModeScaleAspectFill, _videoNode.placeholderImageNode.contentMode);
-}
-
-- (void)testChangingPlayButtonPerformsProperCleanup
-{
-  ASButtonNode *firstButton = _videoNode.playButton;
-  XCTAssertTrue([firstButton.allTargets containsObject:_videoNode]);
-
-  ASButtonNode *secondButton = [[ASButtonNode alloc] init];
-  _videoNode.playButton = secondButton;
-
-  XCTAssertTrue([secondButton.allTargets containsObject:_videoNode]);
-  XCTAssertEqual(_videoNode, secondButton.supernode);
-
-  XCTAssertFalse([firstButton.allTargets containsObject:_videoNode]);
-  XCTAssertNotEqual(_videoNode, firstButton.supernode);
+  XCTAssertEqual(UIViewContentModeScaleAspectFill, _videoNode.contentMode);
 }
 
 - (void)testChangingAssetsChangesPlaceholderImage
@@ -400,10 +372,10 @@
 
   _videoNode.asset = _firstAsset;
   [_videoNode setVideoPlaceholderImage:firstImage];
-  XCTAssertEqual(firstImage, _videoNode.placeholderImageNode.image);
+  XCTAssertEqual(firstImage, _videoNode.image);
 
   _videoNode.asset = _secondAsset;
-  XCTAssertNotEqual(firstImage, _videoNode.placeholderImageNode.image);
+  XCTAssertNotEqual(firstImage, _videoNode.image);
 }
 
 - (void)testClearingFetchedContentShouldClearAssetData
@@ -424,12 +396,12 @@
   
   XCTAssertNotNil(_videoNode.player);
   XCTAssertNotNil(_videoNode.currentItem);
-  XCTAssertNotNil(_videoNode.placeholderImageNode.image);
+  XCTAssertNotNil(_videoNode.image);
 
   [_videoNode clearFetchedData];
   XCTAssertNil(_videoNode.player);
   XCTAssertNil(_videoNode.currentItem);
-  XCTAssertNil(_videoNode.placeholderImageNode.image);
+  XCTAssertNil(_videoNode.image);
 }
 
 @end

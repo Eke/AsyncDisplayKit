@@ -91,7 +91,7 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
 #pragma mark -
 #pragma mark ASCollectionView.
 
-@interface ASCollectionView () <ASRangeControllerDataSource, ASRangeControllerDelegate, ASDataControllerSource, ASCellNodeLayoutDelegate, ASDelegateProxyInterceptor, ASBatchFetchingScrollView> {
+@interface ASCollectionView () <ASRangeControllerDataSource, ASRangeControllerDelegate, ASDataControllerSource, ASCellNodeLayoutDelegate, ASDelegateProxyInterceptor, ASBatchFetchingScrollView, ASDataControllerEnvironmentDelegate> {
   ASCollectionViewProxy *_proxyDataSource;
   ASCollectionViewProxy *_proxyDelegate;
   
@@ -133,6 +133,8 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
     
   struct {
     unsigned int asyncDelegateScrollViewDidScroll:1;
+    unsigned int asyncDelegateScrollViewWillBeginDragging:1;
+    unsigned int asyncDelegateScrollViewDidEndDragging:1;
     unsigned int asyncDelegateScrollViewWillEndDraggingWithVelocityTargetContentOffset:1;
     unsigned int asyncDelegateCollectionViewWillDisplayNodeForItemAtIndexPath:1;
     unsigned int asyncDelegateCollectionViewDidEndDisplayingNodeForItemAtIndexPath:1;
@@ -225,6 +227,7 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   _dataController = [[ASCollectionDataController alloc] initWithAsyncDataFetching:NO];
   _dataController.delegate = _rangeController;
   _dataController.dataSource = self;
+  _dataController.environmentDelegate = self;
   
   _batchContext = [[ASBatchContext alloc] init];
   
@@ -312,6 +315,11 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   [super reloadData];
 }
 
+- (void)relayoutItems
+{
+  [_dataController relayoutAllNodes];
+}
+
 - (void)waitUntilAllUpdatesAreCommitted
 {
   ASDisplayNodeAssertMainThread();
@@ -343,10 +351,10 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
 {
   // Note: It's common to check if the value hasn't changed and short-circuit but we aren't doing that here to handle
   // the (common) case of nilling the asyncDataSource in the ViewController's dealloc. In this case our _asyncDataSource
-  // will return as nil (ARC magic) even though the _proxyDataSource still exists. It's really important to nil out
-  // super.dataSource in this case because calls to ASCollectionViewProxy will start failing and cause crashes.
-
-  super.dataSource = nil;
+  // will return as nil (ARC magic) even though the _proxyDataSource still exists. It's really important to hold a strong
+  // reference to the old dataSource in this case because calls to ASCollectionViewProxy will start failing and cause crashes.
+  NS_VALID_UNTIL_END_OF_SCOPE id oldDataSource = super.dataSource;
+  
   if (asyncDataSource == nil) {
     _asyncDataSource = nil;
     _proxyDataSource = _isDeallocating ? nil : [[ASCollectionViewProxy alloc] initWithTarget:nil interceptor:self];
@@ -375,13 +383,9 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
 {
   // Note: It's common to check if the value hasn't changed and short-circuit but we aren't doing that here to handle
   // the (common) case of nilling the asyncDelegate in the ViewController's dealloc. In this case our _asyncDelegate
-  // will return as nil (ARC magic) even though the _proxyDelegate still exists. It's really important to nil out
-  // super.delegate in this case because calls to ASCollectionViewProxy will start failing and cause crashes.
-  
-  // Order is important here, the asyncDelegate must be callable while nilling super.delegate to avoid random crashes
-  // in UIScrollViewAccessibility.
-
-  super.delegate = nil;
+  // will return as nil (ARC magic) even though the _proxyDataSource still exists. It's really important to hold a strong
+  // reference to the old delegate in this case because calls to ASCollectionViewProxy will start failing and cause crashes.
+  NS_VALID_UNTIL_END_OF_SCOPE id oldDelegate = super.delegate;
   
   if (asyncDelegate == nil) {
     _asyncDelegate = nil;
@@ -399,6 +403,8 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
     _asyncDelegateFlags.asyncDelegateCollectionViewDidEndDisplayingNodeForItemAtIndexPath = [_asyncDelegate respondsToSelector:@selector(collectionView:didEndDisplayingNode:forItemAtIndexPath:)];
     _asyncDelegateFlags.asyncDelegateCollectionViewWillBeginBatchFetchWithContext = [_asyncDelegate respondsToSelector:@selector(collectionView:willBeginBatchFetchWithContext:)];
     _asyncDelegateFlags.asyncDelegateShouldBatchFetchForCollectionView = [_asyncDelegate respondsToSelector:@selector(shouldBatchFetchForCollectionView:)];
+    _asyncDelegateFlags.asyncDelegateScrollViewWillBeginDragging = [_asyncDelegate respondsToSelector:@selector(scrollViewWillBeginDragging:)];
+    _asyncDelegateFlags.asyncDelegateScrollViewDidEndDragging = [_asyncDelegate respondsToSelector:@selector(scrollViewDidEndDragging:willDecelerate:)];
   }
 
   super.delegate = (id<UICollectionViewDelegate>)_proxyDelegate;
@@ -673,6 +679,29 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   }
 }
 
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView
+{
+  for (_ASCollectionViewCell *collectionCell in _cellsForVisibilityUpdates) {
+    [[collectionCell node] cellNodeVisibilityEvent:ASCellNodeVisibilityEventWillBeginDragging
+                                          inScrollView:scrollView
+                                         withCellFrame:collectionCell.frame];
+  }
+  if (_asyncDelegateFlags.asyncDelegateScrollViewWillBeginDragging) {
+    [_asyncDelegate scrollViewWillBeginDragging:scrollView];
+  }
+}
+
+- (void)scrollViewDidEndDragging:(UIScrollView *)scrollView willDecelerate:(BOOL)decelerate
+{
+    for (_ASCollectionViewCell *collectionCell in _cellsForVisibilityUpdates) {
+        [[collectionCell node] cellNodeVisibilityEvent:ASCellNodeVisibilityEventDidEndDragging
+                                          inScrollView:scrollView
+                                         withCellFrame:collectionCell.frame];
+    }
+    if (_asyncDelegateFlags.asyncDelegateScrollViewDidEndDragging) {
+        [_asyncDelegate scrollViewDidEndDragging:scrollView willDecelerate:decelerate];
+    }
+}
 
 #pragma mark - Scroll Direction.
 
@@ -919,6 +948,14 @@ static NSString * const kCellReuseIdentifier = @"_ASCollectionViewCell";
   if (_asyncDataSourceFlags.asyncDataSourceCollectionViewUnlockDataSource) {
     [_asyncDataSource collectionViewUnlockDataSource:self];
   }
+}
+
+- (id<ASEnvironment>)dataControllerEnvironment
+{
+  if (self.collectionNode) {
+    return self.collectionNode;
+  }
+  return self.strongCollectionNode;
 }
 
 #pragma mark - ASCollectionViewDataControllerSource Supplementary view support

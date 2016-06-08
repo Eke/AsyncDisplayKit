@@ -26,6 +26,10 @@
           
           // used for ASCellNode visibility
           selector == @selector(scrollViewDidScroll:) ||
+
+          // used for ASCellNode user interaction
+          selector == @selector(scrollViewWillBeginDragging:) ||
+          selector == @selector(scrollViewDidEndDragging:willDecelerate:) ||
           
           // used for ASRangeController visibility updates
           selector == @selector(tableView:willDisplayCell:forRowAtIndexPath:) ||
@@ -61,6 +65,10 @@
           
           // used for ASCellNode visibility
           selector == @selector(scrollViewDidScroll:) ||
+
+          // used for ASCellNode user interaction
+          selector == @selector(scrollViewWillBeginDragging:) ||
+          selector == @selector(scrollViewDidEndDragging:willDecelerate:) ||
           
           // intercepted due to not being supported by ASCollectionView (prevent bugs caused by usage)
           selector == @selector(collectionView:canMoveItemAtIndexPath:) ||
@@ -77,7 +85,7 @@
 - (BOOL)interceptsSelector:(SEL)selector
 {
   return (
-          // handled by ASPagerNodeDataSource node<->cell machinery
+          // handled by ASPagerDataSource node<->cell machinery
           selector == @selector(collectionView:nodeForItemAtIndexPath:) ||
           selector == @selector(collectionView:nodeBlockForItemAtIndexPath:) ||
           selector == @selector(collectionView:numberOfItemsInSection:) ||
@@ -125,7 +133,15 @@
     if (_target) {
       return [_target respondsToSelector:aSelector] ? _target : nil;
     } else {
-      [_interceptor proxyTargetHasDeallocated:self];
+      // The _interceptor needs to be nilled out in this scenario. For that a strong reference needs to be created
+      // to be able to nil out the _interceptor but still let it know that the proxy target has deallocated
+      // We have to hold a strong reference to the interceptor as we have to nil it out and call the proxyTargetHasDeallocated
+      // The reason that the interceptor needs to be nilled out is that there maybe a change of a infinite loop, for example
+      // if a method will be called in the proxyTargetHasDeallocated: that again would trigger a whole new forwarding cycle
+      id <ASDelegateProxyInterceptor> interceptor = _interceptor;
+      _interceptor = nil;
+      [interceptor proxyTargetHasDeallocated:self];
+      
       return nil;
     }
   }
